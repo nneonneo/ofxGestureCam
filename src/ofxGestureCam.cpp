@@ -299,7 +299,7 @@ private:
 
     void start_video(int width=1280, int height=720, int fps=30) {
         if(cam)
-            cam->start_video(static_depth_cb, reinterpret_cast<void *>(this), width, height, fps);
+            cam->start_video(static_video_cb, reinterpret_cast<void *>(this), width, height, fps);
         else
             LOGE("start_depth called without cam being active!");
     }
