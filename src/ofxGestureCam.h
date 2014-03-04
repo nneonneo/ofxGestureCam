@@ -61,22 +61,22 @@ public:
     /// UV map (colour image coordinates for each depth pixel).
     /// Enabling this will enable the depth stream.
     void setEnableUVMap(bool use=true);
-    
+
     /// Depth map (millimetre distance from the camera at each pixel).
     /// Enabling this will enable the depth stream.
     void setEnableDepthMap(bool use=true);
-    
-    /// Color map (RGB color data from the colour camera).
-    /// Enabling this will enable the color stream.
-    void setEnableColorMap(bool use=true);
-    
+
+    /// Video map (RGB video data from the color camera).
+    /// Enabling this will enable the video stream.
+    void setEnableVideoMap(bool use=true);
+
     /// Depth texture (drawable texture containing millimetre data mapped into RGB colours).
     /// Enabling this will enable the depth stream.
     void setEnableDepthTexture(bool use=true);
-    
-    /// Color texture (drawable texture containing colour RGB data).
+
+    /// Video texture (drawable texture containing colour RGB data).
     /// Enabling this will enable the depth stream.
-    void setEnableColorTexture(bool use=true);
+    void setEnableVideoTexture(bool use=true);
 
 	/// Close the connection and stop grabbing images
 	void close();
@@ -101,7 +101,7 @@ public:
 	float* getDistancePixels();
 
 	/// get the video pixels reference
-	ofPixels & getRGBPixelsRef();
+	ofPixels & getVideoPixelsRef();
 
 	/// get the pixels of the most recent depth frame
 	ofShortPixels & getPhasePixelsRef();	///< raw 11 bit values
@@ -109,19 +109,25 @@ public:
 	/// get the distance in millimeters to a given point as a float array
 	ofFloatPixels & getDistancePixelsRef();
 
+	/// get the video (RGB) texture
+	ofTexture& getVideoTextureRef();
+
+	/// get the mapped-grayscale depth texture
+	ofTexture& getDepthTextureRef();
+
 /// \section Draw
 
 	/// draw the video texture
-	void drawColor(float x, float y, float w, float h);
-	void drawColor(float x, float y);
-	void drawColor(const ofPoint& point);
-	void drawColor(const ofRectangle& rect);
+	void drawVideo(float x, float y, float w, float h);
+	void drawVideo(float x, float y) { drawVideo(x, y, width, height); }
+	void drawVideo(const ofPoint& point) { drawVideo(point.x, point.y); }
+	void drawVideo(const ofRectangle& rect) { drawVideo(rect.x, rect.y, rect.width, rect.height); }
 
 	/// draw the colorized depth texture
 	void drawDepth(float x, float y, float w, float h);
-	void drawDepth(float x, float y);
-	void drawDepth(const ofPoint& point);
-	void drawDepth(const ofRectangle& rect);
+	void drawDepth(float x, float y) { drawDepth(x, y, width, height); }
+	void drawDepth(const ofPoint& point) { drawDepth(point.x, point.y); }
+	void drawDepth(const ofRectangle& rect) { drawDepth(rect.x, rect.y, rect.width, rect.height); }
 
 /// \section Util
 
