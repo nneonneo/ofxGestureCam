@@ -119,13 +119,13 @@ public:
 
 	/// draw the video texture
 	void drawVideo(float x, float y, float w, float h);
-	void drawVideo(float x, float y) { drawVideo(x, y, width, height); }
+	void drawVideo(float x, float y) { drawVideo(x, y, video_width, video_height); }
 	void drawVideo(const ofPoint& point) { drawVideo(point.x, point.y); }
 	void drawVideo(const ofRectangle& rect) { drawVideo(rect.x, rect.y, rect.width, rect.height); }
 
 	/// draw the colorized depth texture
 	void drawDepth(float x, float y, float w, float h);
-	void drawDepth(float x, float y) { drawDepth(x, y, width, height); }
+	void drawDepth(float x, float y) { drawDepth(x, y, depth_width, depth_height); }
 	void drawDepth(const ofPoint& point) { drawDepth(point.x, point.y); }
 	void drawDepth(const ofRectangle& rect) { drawDepth(rect.x, rect.y, rect.width, rect.height); }
 
@@ -139,11 +139,10 @@ public:
 	/// returns an empty string "" if not connected
 	string getSerial() const;
 
-	/// static depth image size
-	const static int width = 320;
-	const static int height = 240;
-	float getHeight() const { return height; }
-	float getWidth() const { return width; }
+    const static int video_width = 1280;
+    const static int video_height = 720;
+    const static int depth_width = 320;
+    const static int depth_height = 240;
 
 /// \section Static global device functions
 

@@ -94,10 +94,10 @@ class ofxGestureCamImpl {
     ofMutex mutex;
     CreativeGestureCam *cam;
 
-    const static int video_width = 1280;
-    const static int video_height = 720;
-    const static int depth_width = 320;
-    const static int depth_height = 240;
+    static const int video_width = ofxGestureCam::video_width;
+    static const int video_height = ofxGestureCam::video_height;
+    static const int depth_width = ofxGestureCam::depth_width;
+    static const int depth_height = ofxGestureCam::depth_height;
 
 public:
     ofxGestureCamImpl() : cam(NULL) {
@@ -281,8 +281,8 @@ private:
         }
 
         if(videoTexEnabled) {
-            videoPx.allocate(1280, 720, 3);
-            start_video();
+            videoPx.allocate(video_width, video_height, 3);
+            start_video(video_width, video_height);
         } else {
             videoPx.clear();
             stop_video();
