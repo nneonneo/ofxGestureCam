@@ -104,10 +104,7 @@ public:
     }
 
     ~ofxGestureCamImpl() {
-        ofMutex::ScopedLock lock(mutex);
-        if(cam) {
-            delete cam;
-        }
+        close();
     }
 
 public:
@@ -130,10 +127,16 @@ public:
     }
 
     void close() {
-        ofMutex::ScopedLock lock(mutex);
         if(cam) {
-            delete cam;
-            cam = NULL;
+            /* Stop streams before locking, to avoid a deadlock while waiting for
+               the callbacks to complete. */
+            cam->stop_video();
+            cam->stop_depth();
+            {
+                ofMutex::ScopedLock lock(mutex);
+                delete cam;
+                cam = NULL;
+            }
         }
     }
 
