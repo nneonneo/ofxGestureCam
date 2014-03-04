@@ -165,7 +165,7 @@ public:
             return;
 
         if(use) {
-            depthTex.allocate(depth_width, depth_height, GL_RGB);
+            depthTex.allocate(depth_width * 2, depth_height, GL_LUMINANCE16);
             depthTexEnabled = true;
         } else {
             depthTex.clear();
@@ -202,8 +202,12 @@ public:
     void update() {
         ofMutex::ScopedLock lock(mutex);
         if(depthRawPx.updated) {
-            /* TODO */
             depthRawPx.swapFront();
+
+            /* TODO */
+            if(depthTexEnabled) {
+                depthTex.loadData(depthRawPx.front.getPixels(), depth_width * 2, depth_height, GL_LUMINANCE);
+            }
             isFrameNewDepth = true;
         } else {
             isFrameNewDepth = false;
@@ -263,7 +267,12 @@ private:
     }
 
     void depth_cb(uvc_frame_t *frame) {
+        memcpy(depthRawPx.back.getPixels(), frame->data, frame->data_bytes);
         /* TODO */
+        {
+            ofMutex::ScopedLock lock(mutex);
+            depthRawPx.swapBack();
+        }
     }
 
     static void static_depth_cb(uvc_frame_t *frame, void *userdata) {
@@ -276,7 +285,7 @@ private:
             return;
 
         if(depthTexEnabled) {
-            depthRawPx.allocate(320, 240, 2);
+            depthRawPx.allocate(depth_width, depth_height, 2);
             start_depth();
         } else {
             depthRawPx.clear();
