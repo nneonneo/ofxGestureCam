@@ -27,6 +27,8 @@
 #include "GestureCam.h"
 #include "Log.h"
 
+#include <cstdlib>
+
 #define CREATIVE_VID   0x041e
 #define GESTURECAM_PID 0x4096
 
@@ -101,6 +103,12 @@ class ofxGestureCamImpl {
 
 public:
     ofxGestureCamImpl() : cam(NULL) {
+#ifdef ANDROID
+        /* On rooted devices, this gives us unrestricted access to USB devices.
+        Note: This won't work if you plug in a USB device while the app is running.
+        So, make sure you have your USB devices plugged in before the app is started. */
+        system("su -c 'chmod 666 /dev/bus/usb/*/*'");
+#endif
     }
 
     ~ofxGestureCamImpl() {
