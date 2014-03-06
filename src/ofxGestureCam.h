@@ -52,31 +52,45 @@ public:
     /// \subsection Feature Control
     /// Phase map (linearly correlated with depth).
     /// Enabling this will enable the depth stream.
-    void setEnablePhaseMap(bool use=true);
+    void setEnablePhaseMap(bool enable=true) { enable ? enablePhaseMap() : disablePhaseMap(); }
+    void enablePhaseMap();
+    void disablePhaseMap();
 
     /// Confidence map (confidence in the depth estimation at each pixel).
     /// Enabling this will enable the depth stream.
-    void setEnableConfidenceMap(bool use=true);
+    void setEnableConfidenceMap(bool enable=true) { enable ? enableConfidenceMap() : disableConfidenceMap(); }
+    void enableConfidenceMap();
+    void disableConfidenceMap();
 
     /// UV map (colour image coordinates for each depth pixel).
     /// Enabling this will enable the depth stream.
-    void setEnableUVMap(bool use=true);
+    void setEnableUVMap(bool enable=true) { enable ? enableUVMap() : disableUVMap(); }
+    void enableUVMap();
+    void disableUVMap();
 
     /// Depth map (millimetre distance from the camera at each pixel).
     /// Enabling this will enable the depth stream.
-    void setEnableDepthMap(bool use=true);
+    void setEnableDistanceMap(bool enable=true) { enable ? enableDistanceMap() : disableDistanceMap(); }
+    void enableDistanceMap();
+    void disableDistanceMap();
 
     /// Video map (RGB video data from the color camera).
     /// Enabling this will enable the video stream.
-    void setEnableVideoMap(bool use=true);
+    void setEnableVideoMap(bool enable=true) { enable ? enableVideoMap() : disableVideoMap(); }
+    void enableVideoMap();
+    void disableVideoMap();
 
     /// Depth texture (drawable texture containing millimetre data mapped into RGB colours).
     /// Enabling this will enable the depth stream.
-    void setEnableDepthTexture(bool use=true);
+    void setEnableDepthTexture(bool enable=true) { enable ? enableDepthTexture() : disableDepthTexture(); }
+    void enableDepthTexture();
+    void disableDepthTexture();
 
     /// Video texture (drawable texture containing colour RGB data).
-    /// Enabling this will enable the depth stream.
-    void setEnableVideoTexture(bool use=true);
+    /// Enabling this will enable the video stream.
+    void setEnableVideoTexture(bool enable=true) { enable ? enableVideoTexture() : disableVideoTexture(); }
+    void enableVideoTexture();
+    void disableVideoTexture();
 
 	/// Close the connection and stop grabbing images
 	void close();
@@ -85,7 +99,7 @@ public:
 	bool isConnected();
 
 	/// Is the current frame new?
-	bool isFrameNew();
+	bool isFrameNew() { return isFrameNewVideo() || isFrameNewDepth(); }
 	bool isFrameNewVideo();
 	bool isFrameNewDepth();
 
@@ -94,20 +108,16 @@ public:
 
 /// \section Pixel Data
 
-	/// get the pixels of the most recent depth frame
-	unsigned short* getPhasePixels();   ///< raw 16 bit values
+    // raw phase values (-32768 = -2*pi)
+	short* getPhasePixels();
 
-	/// get the distance in millimeters to a given point as a float array
-	float* getDistancePixels();
+    // confidence values (0 to 65535)
+    unsigned short* getConfidencePixels();
 
-	/// get the video pixels reference
-	ofPixels & getVideoPixelsRef();
+    ofVec2f* getUVCoords();
 
-	/// get the pixels of the most recent depth frame
-	ofShortPixels & getPhasePixelsRef();	///< raw 11 bit values
-
-	/// get the distance in millimeters to a given point as a float array
-	ofFloatPixels & getDistancePixelsRef();
+    // depth values in mm
+    unsigned short* getDistancePixels();
 
 	/// get the video (RGB) texture
 	ofTexture& getVideoTextureRef();

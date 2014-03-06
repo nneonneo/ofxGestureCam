@@ -24,6 +24,7 @@
 #include "ofxGestureCam.h"
 #include "ofMain.h"
 
+#include "FastAtan2.h"
 #include "GestureCam.h"
 #include "Log.h"
 
@@ -90,6 +91,23 @@ template <typename T> struct TripleBufferedPixels {
     }
 };
 
+struct DepthColors {
+    ofColor noConfidence;
+    ofColor colorMap[65536];
+
+    DepthColors() : noConfidence(0, 0, 0) {
+        for(int i=0; i<65536; i++) {
+            colorMap[i] = ofColor::fromHsb(i >> 7, 129, 129);
+        }
+    }
+
+    ofColor &getColor(int16_t phase, uint16_t confidence) {
+        if(confidence < 50)
+            return noConfidence;
+        return colorMap[phase + 32767];
+    }
+};
+
 class ofxGestureCamImpl {
     static UVCContext ctx;
 
@@ -115,6 +133,15 @@ public:
         close();
     }
 
+private:
+    void open_dev(UVCDevice &dev) {
+        cam = new CreativeGestureCam(dev);
+        if(depthStreamEnabled)
+            start_depth();
+        if(videoStreamEnabled)
+            start_video();
+    }
+
 public:
     bool open_first() {
         ofMutex::ScopedLock lock(mutex);
@@ -128,8 +155,7 @@ public:
             return false;
         }
 
-        cam = new CreativeGestureCam(dev);
-        configure_streams();
+        open_dev(dev);
 
         return true;
     }
@@ -138,8 +164,8 @@ public:
         if(cam) {
             /* Stop streams before locking, to avoid a deadlock while waiting for
                the callbacks to complete. */
-            cam->stop_video();
-            cam->stop_depth();
+            stop_video();
+            stop_depth();
             {
                 ofMutex::ScopedLock lock(mutex);
                 delete cam;
@@ -153,104 +179,9 @@ public:
     }
 
 private:
-    ofTexture depthTex;
-    ofTexture videoTex;
-    Bool depthTexEnabled;
-    Bool videoTexEnabled;
-
-private:
-    TripleBufferedPixels<ofPixels> videoPx;
-    TripleBufferedPixels<ofShortPixels> depthRawPx;
-
-private:
-    Bool isFrameNewDepth;
-    Bool isFrameNewVideo;
-
-public:
-    void setEnableDepthTexture(bool use) {
-        ofMutex::ScopedLock lock(mutex);
-        if(use == depthTexEnabled)
-            return;
-
-        if(use) {
-            depthTex.allocate(depth_width * 2, depth_height, GL_LUMINANCE16);
-            depthTexEnabled = true;
-        } else {
-            depthTex.clear();
-            depthTexEnabled = false;
-        }
-        configure_streams();
-    }
-
-    void setEnableVideoTexture(bool use) {
-        ofMutex::ScopedLock lock(mutex);
-        if(use == videoTexEnabled)
-            return;
-
-        if(use) {
-            videoTex.allocate(video_width, video_height, GL_RGB);
-            videoTexEnabled = true;
-        } else {
-            videoTex.clear();
-            videoTexEnabled = false;
-        }
-        configure_streams();
-    }
-
-    void drawDepth(float x, float y, float w, float h) {
-        if(depthTexEnabled)
-            depthTex.draw(x, y, w, h);
-    }
-
-    void drawVideo(float x, float y, float w, float h) {
-        if(videoTexEnabled)
-            videoTex.draw(x, y, w, h);
-    }
-
-    void update() {
-        ofMutex::ScopedLock lock(mutex);
-        if(depthRawPx.updated) {
-            depthRawPx.swapFront();
-
-            /* TODO */
-            if(depthTexEnabled) {
-                depthTex.loadData(depthRawPx.front.getPixels(), depth_width * 2, depth_height, GL_LUMINANCE);
-            }
-            isFrameNewDepth = true;
-        } else {
-            isFrameNewDepth = false;
-        }
-
-        if(videoPx.updated) {
-            videoPx.swapFront();
-
-            if(videoTexEnabled) {
-                videoTex.loadData(videoPx.front.getPixels(), video_width, video_height, GL_RGB);
-            }
-            isFrameNewVideo = true;
-        } else {
-            isFrameNewVideo = false;
-        }
-    }
-
-    void clear() {
-        ofMutex::ScopedLock lock(mutex);
-
-        if(cam != NULL) {
-            LOGE("clear() called while camera is still active");
-            return;
-        }
-
-        depthTex.clear();
-        videoTex.clear();
-        videoPx.clear();
-        depthRawPx.clear();
-    }
-
-private:
     void video_cb(uvc_frame_t *frame) {
         uvc_frame_t rgb = {
-            videoPx.back.getPixels(),
+            videoStreamPx.back.getPixels(),
             video_width*video_height*3,
             video_width,
             video_height,
@@ -266,7 +197,7 @@ private:
 
         {
             ofMutex::ScopedLock lock(mutex);
-            videoPx.swapBack();
+            videoStreamPx.swapBack();
         }
     }
 
@@ -275,11 +206,10 @@ private:
     }
 
     void depth_cb(uvc_frame_t *frame) {
-        memcpy(depthRawPx.back.getPixels(), frame->data, frame->data_bytes);
-        /* TODO */
+        memcpy(depthStreamPx.back.getPixels(), frame->data, frame->data_bytes);
         {
             ofMutex::ScopedLock lock(mutex);
-            depthRawPx.swapBack();
+            depthStreamPx.swapBack();
         }
     }
 
@@ -288,40 +218,15 @@ private:
     }
 
 private:
-    void configure_streams() {
-        if(!cam)
-            return;
-
-        if(depthTexEnabled) {
-            depthRawPx.allocate(depth_width, depth_height, 2);
-            start_depth();
-        } else {
-            depthRawPx.clear();
-            stop_depth();
-        }
-
-        if(videoTexEnabled) {
-            videoPx.allocate(video_width, video_height, 3);
-            start_video(video_width, video_height);
-        } else {
-            videoPx.clear();
-            stop_video();
-        }
-    }
-
     /* These must be called with the lock held. */
     void start_depth(int fps=60) {
         if(cam)
             cam->start_depth(static_depth_cb, reinterpret_cast<void *>(this), fps);
-        else
-            LOGE("start_depth called without cam being active!");
     }
 
     void start_video(int width=1280, int height=720, int fps=30) {
         if(cam)
             cam->start_video(static_video_cb, reinterpret_cast<void *>(this), width, height, fps);
-        else
-            LOGE("start_depth called without cam being active!");
     }
 
     void stop_depth() {
@@ -332,6 +237,289 @@ private:
     void stop_video() {
         if(cam)
             cam->stop_video();
+    }
+
+private:
+    TripleBufferedPixels<ofPixels> videoStreamPx;
+    TripleBufferedPixels<ofShortPixels> depthStreamPx;
+
+public:
+    ofShortPixels phaseMap;
+    ofShortPixels confidenceMap;
+    ofFloatPixels UVMap;
+    ofShortPixels distanceMap;
+    ofPixels depthRGBMap;
+    // no videoMap: videoStream is used directly
+
+    ofTexture depthTex;
+    ofTexture videoTex;
+
+private:
+    Bool depthStreamEnabled;
+    Bool videoStreamEnabled;
+
+    Bool phaseMapEnabled;
+    Bool confidenceMapEnabled;
+    Bool UVMapEnabled;
+    Bool distanceMapEnabled;
+    Bool videoMapEnabled;
+
+    Bool depthTextureEnabled;
+    Bool videoTextureEnabled;
+
+private:
+    FastAtan2 fastAtan;
+    DepthColors depthColors;
+
+    Bool frameNewDepth;
+    Bool frameNewVideo;
+
+public:
+    void setEnableDepthStream(bool use) {
+        if(use == depthStreamEnabled)
+            return;
+
+        if(use) {
+            {
+                ofMutex::ScopedLock lock(mutex);
+                depthStreamPx.allocate(depth_width * 2, depth_height, 1);
+            }
+            start_depth();
+        } else {
+            stop_depth();
+            {
+                ofMutex::ScopedLock lock(mutex);
+                depthStreamPx.clear();
+            }
+        }
+        depthStreamEnabled = use;
+    }
+
+    void setEnableVideoStream(bool use) {
+        if(use == videoStreamEnabled)
+            return;
+
+        if(use) {
+            {
+                ofMutex::ScopedLock lock(mutex);
+                videoStreamPx.allocate(video_width, video_height, 3);
+            }
+            start_video();
+        } else {
+            stop_video();
+            {
+                ofMutex::ScopedLock lock(mutex);
+                videoStreamPx.clear();
+            }
+        }
+        videoStreamEnabled = use;
+    }
+
+    void setEnablePhaseMap(bool use) {
+        if(use == phaseMapEnabled)
+            return;
+
+        ofMutex::ScopedLock lock(mutex);
+
+        if(use) {
+            phaseMap.allocate(depth_width, depth_height, 1);
+        } else {
+            phaseMap.clear();
+        }
+        phaseMapEnabled = use;
+    }
+
+    void setEnableConfidenceMap(bool use) {
+        if(use == confidenceMapEnabled)
+            return;
+
+        ofMutex::ScopedLock lock(mutex);
+
+        if(use) {
+            confidenceMap.allocate(depth_width, depth_height, 1);
+        } else {
+            confidenceMap.clear();
+        }
+        confidenceMapEnabled = use;
+    }
+
+    void setEnableUVMap(bool use) {
+        if(use == UVMapEnabled)
+            return;
+
+        ofMutex::ScopedLock lock(mutex);
+
+        if(use) {
+            UVMap.allocate(depth_width, depth_height, 2);
+        } else {
+            UVMap.clear();
+        }
+        UVMapEnabled = use;
+    }
+
+    void setEnableDistanceMap(bool use) {
+        if(use == distanceMapEnabled)
+            return;
+
+        ofMutex::ScopedLock lock(mutex);
+
+        if(use) {
+            distanceMap.allocate(depth_width, depth_height, 1);
+        } else {
+            distanceMap.clear();
+        }
+        distanceMapEnabled = use;
+    }
+
+    void setEnableVideoMap(bool use) {
+        /* no-op since video map uses the same pixels as the video stream */
+        videoMapEnabled = use;
+    }
+
+    void setEnableDepthTexture(bool use) {
+        if(use == depthTextureEnabled)
+            return;
+
+        ofMutex::ScopedLock lock(mutex);
+
+        if(use) {
+            depthRGBMap.allocate(depth_width, depth_height, 3);
+            depthTex.allocate(depth_width, depth_height, GL_RGB);
+        } else {
+            depthRGBMap.clear();
+            depthTex.clear();
+        }
+        depthTextureEnabled = use;
+    }
+
+    void setEnableVideoTexture(bool use) {
+        if(use == videoTextureEnabled)
+            return;
+
+        ofMutex::ScopedLock lock(mutex);
+
+        if(use) {
+            videoTex.allocate(video_width, video_height, GL_RGB);
+        } else {
+            videoTex.clear();
+        }
+        videoTextureEnabled = use;
+    }
+
+public:
+
+    bool isDepthStreamNeeded() {
+        return phaseMapEnabled || confidenceMapEnabled || UVMapEnabled || distanceMapEnabled || depthTextureEnabled;
+    }
+
+    bool isVideoStreamNeeded() {
+        return videoMapEnabled || videoTextureEnabled;
+    }
+
+    bool isFrameNewDepth() {
+        return frameNewDepth;
+    }
+
+    bool isFrameNewVideo() {
+        return frameNewVideo;
+    }
+
+    void drawDepth(float x, float y, float w, float h) {
+        if(cam != NULL && depthStreamEnabled && depthTextureEnabled)
+            depthTex.draw(x, y, w, h);
+    }
+
+    void drawVideo(float x, float y, float w, float h) {
+        if(cam != NULL && videoStreamEnabled && videoTextureEnabled)
+            videoTex.draw(x, y, w, h);
+    }
+
+    void update() {
+        if(cam == NULL)
+            return;
+
+        if(depthStreamPx.updated) {
+            {
+                ofMutex::ScopedLock lock(mutex);
+                depthStreamPx.swapFront();
+            }
+
+            const int16_t *rawPx = (int16_t *)depthStreamPx.front.getPixels();
+
+            int16_t *phasePx = (int16_t *)phaseMap.getPixels();
+            uint16_t *confidencePx = confidenceMap.getPixels();
+            /* TODO: UV */
+            uint16_t *distancePx = distanceMap.getPixels();
+            uint8_t *rgbPx = depthRGBMap.getPixels();
+            for(int y=0; y<240; y++) {
+                for(int x=0; x<320; x+=8) {
+                    for(int j=0; j<8; j++) {
+                        int16_t I = rawPx[640*y + 2*x + j];
+                        int16_t Q = rawPx[640*y + 2*x + 8 + j];
+                        int16_t phase = fastAtan.atan2_16(Q, I);
+                        uint16_t confidence = ((I < 0) ? -I : I) + ((Q < 0) ? -Q : Q);
+
+                        if(phaseMapEnabled)
+                            *phasePx++ = phase;
+                        if(confidenceMapEnabled)
+                            *confidencePx++ = confidence;
+                        if(distanceMapEnabled) {
+                            /* TODO: Correct the distance calculation! */
+                            *distancePx++ = (phase + 32767) / 16;
+                        }
+                        if(depthTextureEnabled) {
+                            ofColor c = depthColors.getColor(phase, confidence);
+                            rgbPx[0] = c.r;
+                            rgbPx[1] = c.g;
+                            rgbPx[2] = c.b;
+                            rgbPx += 3;
+                        }
+                    }
+                }
+            }
+
+            if(depthTextureEnabled) {
+                depthTex.loadData(depthRGBMap.getPixels(), depth_width, depth_height, GL_RGB);
+            }
+            frameNewDepth = true;
+        } else {
+            frameNewDepth = false;
+        }
+
+        if(videoStreamPx.updated) {
+            {
+                ofMutex::ScopedLock lock(mutex);
+                videoStreamPx.swapFront();
+            }
+
+            if(videoTextureEnabled) {
+                videoTex.loadData(videoStreamPx.front.getPixels(), video_width, video_height, GL_RGB);
+            }
+            frameNewVideo = true;
+        } else {
+            frameNewVideo = false;
+        }
+    }
+
+    void clear() {
+        ofMutex::ScopedLock lock(mutex);
+
+        if(cam != NULL) {
+            LOGE("clear() called while camera is still active");
+            return;
+        }
+
+        setEnablePhaseMap(false);
+        setEnableConfidenceMap(false);
+        setEnableUVMap(false);
+        setEnableDistanceMap(false);
+        setEnableVideoMap(false);
+
+        setEnableDepthTexture(false);
+        setEnableVideoTexture(false);
+
+        setEnableDepthStream(false);
+        setEnableVideoStream(false);
     }
 };
 
@@ -360,13 +548,99 @@ bool ofxGestureCam::open(int id) {
     return impl->open_first();
 }
 
-void ofxGestureCam::setEnableDepthTexture(bool use) {
-    impl->setEnableDepthTexture(use);
+
+void ofxGestureCam::enablePhaseMap() {
+    impl->setEnableDepthStream(true);
+    impl->setEnablePhaseMap(true);
 }
 
-void ofxGestureCam::setEnableVideoTexture(bool use) {
-    impl->setEnableVideoTexture(use);
+void ofxGestureCam::disablePhaseMap() {
+    impl->setEnablePhaseMap(false);
+    if(!impl->isDepthStreamNeeded())
+        impl->setEnableDepthStream(false);
 }
+
+
+void ofxGestureCam::enableConfidenceMap() {
+    impl->setEnableDepthStream(true);
+    impl->setEnableConfidenceMap(true);
+}
+
+void ofxGestureCam::disableConfidenceMap() {
+    impl->setEnableConfidenceMap(false);
+    if(!impl->isDepthStreamNeeded())
+        impl->setEnableDepthStream(false);
+}
+
+
+void ofxGestureCam::enableUVMap() {
+    impl->setEnableDepthStream(true);
+    impl->setEnableUVMap(true);
+}
+
+void ofxGestureCam::disableUVMap() {
+    impl->setEnableUVMap(false);
+    if(!impl->isDepthStreamNeeded())
+        impl->setEnableDepthStream(false);
+}
+
+
+void ofxGestureCam::enableDistanceMap() {
+    impl->setEnableDepthStream(true);
+    impl->setEnableDistanceMap(true);
+}
+
+void ofxGestureCam::disableDistanceMap() {
+    impl->setEnableDistanceMap(false);
+    if(!impl->isDepthStreamNeeded())
+        impl->setEnableDepthStream(false);
+}
+
+
+void ofxGestureCam::enableVideoMap() {
+    impl->setEnableVideoStream(true);
+    impl->setEnableVideoMap(true);
+}
+
+void ofxGestureCam::disableVideoMap() {
+    impl->setEnableVideoMap(false);
+    if(!impl->isVideoStreamNeeded())
+        impl->setEnableVideoStream(false);
+}
+
+
+void ofxGestureCam::enableDepthTexture() {
+    impl->setEnableDepthStream(true);
+    impl->setEnableDepthTexture(true);
+}
+
+void ofxGestureCam::disableDepthTexture() {
+    impl->setEnableDepthTexture(false);
+    if(!impl->isDepthStreamNeeded())
+        impl->setEnableDepthStream(false);
+}
+
+
+void ofxGestureCam::enableVideoTexture() {
+    impl->setEnableVideoStream(true);
+    impl->setEnableVideoTexture(true);
+}
+
+void ofxGestureCam::disableVideoTexture() {
+    impl->setEnableVideoTexture(false);
+    if(!impl->isVideoStreamNeeded())
+        impl->setEnableVideoStream(false);
+}
+
+
+bool ofxGestureCam::isFrameNewVideo() {
+    return impl->isFrameNewVideo();
+}
+
+bool ofxGestureCam::isFrameNewDepth() {
+    return impl->isFrameNewDepth();
+}
+
 
 void ofxGestureCam::close() {
     impl->close();
@@ -386,4 +660,28 @@ void ofxGestureCam::drawVideo(float x, float y, float w, float h) {
 
 void ofxGestureCam::drawDepth(float x, float y, float w, float h) {
     impl->drawDepth(x, y, w, h);
+}
+
+short* ofxGestureCam::getPhasePixels() {
+    return reinterpret_cast<short *>(impl->phaseMap.getPixels());
+}
+
+unsigned short* ofxGestureCam::getConfidencePixels() {
+    return impl->confidenceMap.getPixels();
+}
+
+ofVec2f* ofxGestureCam::getUVCoords() {
+    return reinterpret_cast<ofVec2f *>(impl->UVMap.getPixels());
+}
+
+unsigned short* ofxGestureCam::getDistancePixels() {
+    return impl->distanceMap.getPixels();
+}
+
+ofTexture& ofxGestureCam::getVideoTextureRef() {
+    return impl->videoTex;
+}
+
+ofTexture& ofxGestureCam::getDepthTextureRef() {
+    return impl->depthTex;
 }
