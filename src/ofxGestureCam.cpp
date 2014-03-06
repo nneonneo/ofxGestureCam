@@ -136,6 +136,14 @@ public:
 private:
     void open_dev(UVCDevice &dev) {
         cam = new CreativeGestureCam(dev);
+
+        uvc_device_descriptor_t *desc;
+        if(uvc_get_device_descriptor(dev.dev, &desc) == UVC_SUCCESS) {
+            if(desc->serialNumber)
+                deviceSerial = desc->serialNumber;
+            uvc_free_device_descriptor(desc);
+        }
+
         if(depthStreamEnabled)
             start_depth();
         if(videoStreamEnabled)
@@ -160,6 +168,35 @@ public:
         return true;
     }
 
+    bool open_nth(int index) {
+        vector<UVCDevice> devices = UVCDevice::getDeviceList(ctx);
+        int count = 0;
+        for(vector<UVCDevice>::iterator it = devices.begin(); it != devices.end(); it++) {
+            uvc_device_descriptor_t *desc;
+            if(uvc_get_device_descriptor(it->dev, &desc) != UVC_SUCCESS)
+                continue;
+
+            if(desc->idVendor == CREATIVE_VID && desc->idProduct == GESTURECAM_PID) {
+                if(count == index) {
+                    open_dev(*it);
+                    uvc_free_device_descriptor(desc);
+                    return true;
+                }
+
+                count++;
+            }
+
+            uvc_free_device_descriptor(desc);
+        }
+
+        if(count == 0) {
+            LOGE("No devices found.");
+        } else {
+            LOGE("Device index %d is out of range (only have %d devices)", index, count);
+        }
+        return false;
+    }
+
     void close() {
         if(cam) {
             /* Stop streams before locking, to avoid a deadlock while waiting for
@@ -170,6 +207,7 @@ public:
                 ofMutex::ScopedLock lock(mutex);
                 delete cam;
                 cam = NULL;
+                deviceSerial = "";
             }
         }
     }
@@ -521,6 +559,49 @@ public:
         setEnableDepthStream(false);
         setEnableVideoStream(false);
     }
+
+public:
+    string deviceSerial;
+
+    static void listDevices() {
+        vector<UVCDevice> devices = UVCDevice::getDeviceList(ctx);
+        int count = 0;
+        for(vector<UVCDevice>::iterator it = devices.begin(); it != devices.end(); it++) {
+            uvc_device_descriptor_t *desc;
+            if(uvc_get_device_descriptor(it->dev, &desc) != UVC_SUCCESS)
+                continue;
+
+            LOGD("Device vid=%04x pid=%04x serial=%s manufacturer=%s product=%s\n",
+                desc->idVendor, desc->idProduct, desc->serialNumber ?: "",
+                desc->manufacturer ?: "", desc->product ?: "");
+
+            if(desc->idVendor == CREATIVE_VID && desc->idProduct == GESTURECAM_PID) {
+                count++;
+            }
+
+            uvc_free_device_descriptor(desc);
+        }
+        if(count == 0) {
+            LOGD("No GestureCam devices found.");
+        }
+    }
+
+    static int numDevices() {
+        vector<UVCDevice> devices = UVCDevice::getDeviceList(ctx);
+        int count = 0;
+        for(vector<UVCDevice>::iterator it = devices.begin(); it != devices.end(); it++) {
+            uvc_device_descriptor_t *desc;
+            if(uvc_get_device_descriptor(it->dev, &desc) != UVC_SUCCESS)
+                continue;
+
+            if(desc->idVendor == CREATIVE_VID && desc->idProduct == GESTURECAM_PID) {
+                count++;
+            }
+
+            uvc_free_device_descriptor(desc);
+        }
+        return count;
+    }
 };
 
 UVCContext ofxGestureCamImpl::ctx;
@@ -539,13 +620,11 @@ void ofxGestureCam::clear() {
 }
 
 bool ofxGestureCam::open(int id) {
-    if(id != -1) {
-        /* TODO */
-        LOGE("open(id) not supported");
-        return false;
+    if(id == -1) {
+        return impl->open_first();
+    } else {
+        return impl->open_nth(id);
     }
-
-    return impl->open_first();
 }
 
 
@@ -684,4 +763,16 @@ ofTexture& ofxGestureCam::getVideoTextureRef() {
 
 ofTexture& ofxGestureCam::getDepthTextureRef() {
     return impl->depthTex;
+}
+
+string ofxGestureCam::getSerial() const {
+    return impl->deviceSerial;
+}
+
+void ofxGestureCam::listDevices() {
+    ofxGestureCamImpl::listDevices();
+}
+
+int ofxGestureCam::numDevices() {
+    return ofxGestureCamImpl::numDevices();
 }

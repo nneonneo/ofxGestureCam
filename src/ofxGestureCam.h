@@ -141,10 +141,6 @@ public:
 
 /// \section Util
 
-	/// get the device id
-	/// returns -1 if not connected
-	int getDeviceId() const;
-
 	/// get the unique device serial number
 	/// returns an empty string "" if not connected
 	string getSerial() const;
@@ -160,25 +156,7 @@ public:
 	static void listDevices();
 
 	/// get the total number of devices
-	static int numTotalDevices();
-
-	/// get the number of available devices (not connected)
-	static int numAvailableDevices();
-
-	/// get the number of currently connected devices
-	static int numConnectedDevices();
-
-	/// is a device already connected?
-	static bool isDeviceConnected(int id);
-	static bool isDeviceConnected(string serial);
-
-	/// get the id of the next available device,
-	/// returns -1 if nothing found
-	static int nextAvailableId();
-
-	/// get the serial number of the next available device,
-	/// returns an empty string "" if nothing found
-	static string nextAvailableSerial();
+	static int numDevices();
 
 private:
     friend class ofxGestureCamImpl;
