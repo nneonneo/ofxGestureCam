@@ -97,8 +97,9 @@ struct DepthColors {
 
     DepthColors() : noConfidence(0, 0, 0) {
         for(int i=0; i<65536; i++) {
-            colorMap[i] = ofColor::fromHsb(i >> 7, 129, 129);
+            colorMap[i] = ofColor::fromHsb((i >> 4) & 0xff, 255, 255);
         }
+        colorMap[0x7fff + 32767] = ofColor(255, 255, 255);
     }
 
     ofColor &getColor(int16_t phase, uint16_t confidence) {
@@ -494,7 +495,7 @@ public:
                     for(int j=0; j<8; j++) {
                         int16_t I = rawPx[640*y + 2*x + j];
                         int16_t Q = rawPx[640*y + 2*x + 8 + j];
-                        int16_t phase = fastAtan.atan2_16(Q, I);
+                        int16_t phase = (Q == 0x7fff) ? 0x7fff : fastAtan.atan2_16(Q, I);
                         uint16_t confidence = ((I < 0) ? -I : I) + ((Q < 0) ? -Q : Q);
 
                         if(phaseMapEnabled)
