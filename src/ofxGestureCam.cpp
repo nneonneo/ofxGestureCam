@@ -287,11 +287,14 @@ public:
     ofShortPixels confidenceMap;
     ofFloatPixels UVMap;
     ofShortPixels distanceMap;
+    ofShortPixels rawIRIMap, rawIRQMap;
+    ofPixels rawIRIMap8, rawIRQMap8;
     ofPixels depthRGBMap;
     // no videoMap: videoStream is used directly
 
     ofTexture depthTex;
     ofTexture videoTex;
+    ofTexture rawIRITex, rawIRQTex;
 
 private:
     Bool depthStreamEnabled;
@@ -301,10 +304,12 @@ private:
     Bool confidenceMapEnabled;
     Bool UVMapEnabled;
     Bool distanceMapEnabled;
+    Bool rawIRMapsEnabled;
     Bool videoMapEnabled;
 
     Bool depthTextureEnabled;
     Bool videoTextureEnabled;
+    Bool rawIRTexturesEnabled;
 
 private:
     FastAtan2 fastAtan;
@@ -410,6 +415,22 @@ public:
         distanceMapEnabled = use;
     }
 
+    void setEnableRawIRMaps(bool use) {
+    	if(use == rawIRMapsEnabled)
+    		return;
+
+        ofMutex::ScopedLock lock(mutex);
+
+        if(use) {
+            rawIRIMap.allocate(depth_width, depth_height, 1);
+            rawIRQMap.allocate(depth_width, depth_height, 1);
+        } else {
+            rawIRIMap.clear();
+            rawIRQMap.clear();
+        }
+        rawIRMapsEnabled = use;
+    }
+
     void setEnableVideoMap(bool use) {
         /* no-op since video map uses the same pixels as the video stream */
         videoMapEnabled = use;
@@ -445,10 +466,30 @@ public:
         videoTextureEnabled = use;
     }
 
+    void setEnableRawIRTextures(bool use) {
+		if(use == rawIRTexturesEnabled)
+			return;
+
+		ofMutex::ScopedLock lock(mutex);
+
+		if(use) {
+			rawIRIMap8.allocate(depth_width, depth_height, 1);
+			rawIRQMap8.allocate(depth_width, depth_height, 1);
+            rawIRITex.allocate(depth_width, depth_height, GL_LUMINANCE);
+            rawIRQTex.allocate(depth_width, depth_height, GL_LUMINANCE);
+		} else {
+			rawIRIMap8.clear();
+			rawIRQMap8.clear();
+			rawIRITex.clear();
+			rawIRQTex.clear();
+		}
+		rawIRTexturesEnabled = use;
+	}
 public:
 
     bool isDepthStreamNeeded() {
-        return phaseMapEnabled || confidenceMapEnabled || UVMapEnabled || distanceMapEnabled || depthTextureEnabled;
+        return phaseMapEnabled || confidenceMapEnabled || UVMapEnabled || distanceMapEnabled ||
+        		rawIRMapsEnabled || depthTextureEnabled || rawIRTexturesEnabled;
     }
 
     bool isVideoStreamNeeded() {
@@ -473,6 +514,16 @@ public:
             videoTex.draw(x, y, w, h);
     }
 
+    void drawRawIRI(float x, float y, float w, float h) {
+        if(cam != NULL && depthStreamEnabled && rawIRTexturesEnabled)
+            rawIRITex.draw(x, y, w, h);
+    }
+
+    void drawRawIRQ(float x, float y, float w, float h) {
+        if(cam != NULL && depthStreamEnabled && rawIRTexturesEnabled)
+            rawIRQTex.draw(x, y, w, h);
+    }
+
     void update() {
         if(cam == NULL)
             return;
@@ -489,6 +540,10 @@ public:
             uint16_t *confidencePx = confidenceMap.getPixels();
             /* TODO: UV */
             uint16_t *distancePx = distanceMap.getPixels();
+            int16_t *rawIRIPx = (int16_t *)rawIRIMap.getPixels();
+            int16_t *rawIRQPx = (int16_t *)rawIRQMap.getPixels();
+            uint8_t *rawIRI8Px = rawIRIMap8.getPixels();
+            uint8_t *rawIRQ8Px = rawIRQMap8.getPixels();
             uint8_t *rgbPx = depthRGBMap.getPixels();
             for(int y=0; y<240; y++) {
                 for(int x=0; x<320; x+=8) {
@@ -506,6 +561,10 @@ public:
                             /* TODO: Correct the distance calculation! */
                             *distancePx++ = (phase + 32767) / 16;
                         }
+                        if(rawIRMapsEnabled) {
+                        	*rawIRIPx++ = I;
+                        	*rawIRQPx++ = Q;
+                        }
                         if(depthTextureEnabled) {
                             ofColor c = depthColors.getColor(phase, confidence);
                             rgbPx[0] = c.r;
@@ -513,12 +572,20 @@ public:
                             rgbPx[2] = c.b;
                             rgbPx += 3;
                         }
+                        if(rawIRTexturesEnabled) {
+                        	*rawIRI8Px++ = (I >> 1) + 128;
+                        	*rawIRQ8Px++ = (Q >> 1) + 128;
+                        }
                     }
                 }
             }
 
             if(depthTextureEnabled) {
                 depthTex.loadData(depthRGBMap.getPixels(), depth_width, depth_height, GL_RGB);
+            }
+            if(rawIRTexturesEnabled) {
+            	rawIRITex.loadData(rawIRIMap8.getPixels(), depth_width, depth_height, GL_LUMINANCE);
+            	rawIRQTex.loadData(rawIRQMap8.getPixels(), depth_width, depth_height, GL_LUMINANCE);
             }
             frameNewDepth = true;
         } else {
@@ -677,6 +744,18 @@ void ofxGestureCam::disableDistanceMap() {
 }
 
 
+void ofxGestureCam::enableRawIRMaps() {
+	impl->setEnableRawIRMaps(true);
+    impl->setEnableDepthStream(true);
+}
+
+void ofxGestureCam::disableRawIRMaps() {
+    impl->setEnableRawIRMaps(false);
+    if(!impl->isDepthStreamNeeded())
+        impl->setEnableDepthStream(false);
+}
+
+
 void ofxGestureCam::enableVideoMap() {
     impl->setEnableVideoStream(true);
     impl->setEnableVideoMap(true);
@@ -696,6 +775,18 @@ void ofxGestureCam::enableDepthTexture() {
 
 void ofxGestureCam::disableDepthTexture() {
     impl->setEnableDepthTexture(false);
+    if(!impl->isDepthStreamNeeded())
+        impl->setEnableDepthStream(false);
+}
+
+
+void ofxGestureCam::enableRawIRTextures() {
+	impl->setEnableRawIRTextures(true);
+    impl->setEnableDepthStream(true);
+}
+
+void ofxGestureCam::disableRawIRTextures() {
+    impl->setEnableRawIRTextures(false);
     if(!impl->isDepthStreamNeeded())
         impl->setEnableDepthStream(false);
 }
@@ -742,6 +833,14 @@ void ofxGestureCam::drawDepth(float x, float y, float w, float h) {
     impl->drawDepth(x, y, w, h);
 }
 
+void ofxGestureCam::drawRawIRI(float x, float y, float w, float h) {
+	impl->drawRawIRI(x, y, w, h);
+}
+
+void ofxGestureCam::drawRawIRQ(float x, float y, float w, float h) {
+	impl->drawRawIRQ(x, y, w, h);
+}
+
 short* ofxGestureCam::getPhasePixels() {
     return reinterpret_cast<short *>(impl->phaseMap.getPixels());
 }
@@ -758,12 +857,28 @@ unsigned short* ofxGestureCam::getDistancePixels() {
     return impl->distanceMap.getPixels();
 }
 
+short* ofxGestureCam::getRawIRIPixels() {
+	return reinterpret_cast<short *>(impl->rawIRIMap.getPixels());
+}
+
+short* ofxGestureCam::getRawIRQPixels() {
+	return reinterpret_cast<short *>(impl->rawIRQMap.getPixels());
+}
+
 ofTexture& ofxGestureCam::getVideoTextureRef() {
     return impl->videoTex;
 }
 
 ofTexture& ofxGestureCam::getDepthTextureRef() {
     return impl->depthTex;
+}
+
+ofTexture& ofxGestureCam::getRawIRITextureRef() {
+    return impl->rawIRITex;
+}
+
+ofTexture& ofxGestureCam::getRawIRQTextureRef() {
+    return impl->rawIRQTex;
 }
 
 string ofxGestureCam::getSerial() const {

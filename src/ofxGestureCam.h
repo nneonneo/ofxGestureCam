@@ -74,6 +74,12 @@ public:
     void enableDistanceMap();
     void disableDistanceMap();
 
+    /// Raw IR in-phase (I) and quadrature (Q) maps.
+    /// Enabling this will enable the depth stream.
+    void setEnableRawIRMaps(bool enable=true) { enable ? enableRawIRMaps() : disableRawIRMaps(); }
+    void enableRawIRMaps();
+    void disableRawIRMaps();
+
     /// Video map (RGB video data from the color camera).
     /// Enabling this will enable the video stream.
     void setEnableVideoMap(bool enable=true) { enable ? enableVideoMap() : disableVideoMap(); }
@@ -91,6 +97,12 @@ public:
     void setEnableVideoTexture(bool enable=true) { enable ? enableVideoTexture() : disableVideoTexture(); }
     void enableVideoTexture();
     void disableVideoTexture();
+
+    /// Raw IR in-phase (I) and quadrature (Q) textures.
+    /// Enabling this will enable the depth stream.
+    void setEnableRawIRTextures(bool enable=true) { enable ? enableRawIRTextures() : disableRawIRTextures(); }
+    void enableRawIRTextures();
+    void disableRawIRTextures();
 
 	/// Close the connection and stop grabbing images
 	void close();
@@ -119,11 +131,17 @@ public:
     // depth values in mm
     unsigned short* getDistancePixels();
 
+    short *getRawIRIPixels();
+    short *getRawIRQPixels();
+
 	/// get the video (RGB) texture
 	ofTexture& getVideoTextureRef();
 
 	/// get the mapped-grayscale depth texture
 	ofTexture& getDepthTextureRef();
+
+    ofTexture& getRawIRITextureRef();
+    ofTexture& getRawIRQTextureRef();
 
 /// \section Draw
 
@@ -138,6 +156,16 @@ public:
 	void drawDepth(float x, float y) { drawDepth(x, y, depth_width, depth_height); }
 	void drawDepth(const ofPoint& point) { drawDepth(point.x, point.y); }
 	void drawDepth(const ofRectangle& rect) { drawDepth(rect.x, rect.y, rect.width, rect.height); }
+
+	void drawRawIRI(float x, float y, float w, float h);
+	void drawRawIRI(float x, float y) { drawRawIRI(x, y, depth_width, depth_height); }
+	void drawRawIRI(const ofPoint& point) { drawRawIRI(point.x, point.y); }
+	void drawRawIRI(const ofRectangle& rect) { drawRawIRI(rect.x, rect.y, rect.width, rect.height); }
+
+	void drawRawIRQ(float x, float y, float w, float h);
+	void drawRawIRQ(float x, float y) { drawRawIRQ(x, y, depth_width, depth_height); }
+	void drawRawIRQ(const ofPoint& point) { drawRawIRQ(point.x, point.y); }
+	void drawRawIRQ(const ofRectangle& rect) { drawRawIRQ(rect.x, rect.y, rect.width, rect.height); }
 
 /// \section Util
 
