@@ -245,6 +245,11 @@ private:
     }
 
     void depth_cb(uvc_frame_t *frame) {
+        if(frame->data_bytes != depth_width * depth_height * 4) {
+            LOGE("%s: invalid frame! Got size=%d, expected %d",
+                 __func__, frame->data_bytes, depth_width * depth_height * 4);
+            return;
+        }
         memcpy(depthStreamPx.back.getPixels(), frame->data, frame->data_bytes);
         {
             ofMutex::ScopedLock lock(mutex);
