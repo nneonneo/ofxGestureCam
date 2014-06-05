@@ -33,6 +33,8 @@
 #define CREATIVE_VID   0x041e
 #define GESTURECAM_PID 0x4096
 
+#define PHASE_TO_DISTANCE_FACTOR 11.31032
+
 struct Bool {
     bool val;
     Bool(bool val=false) : val(val) {
@@ -103,8 +105,8 @@ struct DepthColors {
     }
 
     ofColor &getColor(int16_t phase, uint16_t confidence) {
-        if(confidence < 50)
-            return noConfidence;
+        //if(confidence < 50)
+        //    return noConfidence;
         return colorMap[phase + 32767];
     }
 };
