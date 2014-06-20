@@ -573,7 +573,7 @@ public:
                         	*rawIRQPx++ = Q;
                         }
                         if(depthTextureEnabled) {
-                            ofColor c = depthColors.getColor(phase, confidence);
+                            const ofColor &c = depthColors.getColor(phase, confidence);
                             rgbPx[0] = c.r;
                             rgbPx[1] = c.g;
                             rgbPx[2] = c.b;
