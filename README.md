@@ -8,14 +8,14 @@ MIT License.
 For information on usage and redistribution, and for a DISCLAIMER OF ALL
 WARRANTIES, see the file, "LICENSE.txt," in this distribution.
 
-See https://github.com/nneonneo/gesturecam for documentation as well as the [OF forums](http://forum.openframeworks.cc/index.php).
+See https://github.com/nneonneo/ofxGestureCam for documentation as well as the [OF forums](http://forum.openframeworks.cc/index.php).
 
 This project uses [libuvc](https://github.com/nneonneo/libuvc).
 
 Description
 -----------
 
-ofxGestureCam is an Open Frameworks addon for the Creative Gesturecam that runs on Mac OS X and Android (currently).
+ofxGestureCam is an Open Frameworks addon for the Creative Gesturecam that runs on Mac OS X and Android (currently). It uses an unofficial, reverse-engineered driver developed by Robert Xiao.
 
 Caveats
 -------
