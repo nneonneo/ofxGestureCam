@@ -19,7 +19,7 @@ meta:
 	ADDON_DESCRIPTION = Addon for interfacing with the Creative Gesturecam
 	ADDON_AUTHOR = Robert Xiao
 	ADDON_TAGS = "computer vision" "3D sensing"
-	ADDON_URL = http://github.com/nneonneo/gesturecam
+	ADDON_URL = https://github.com/nneonneo/ofxGestureCam
 
 common:
 	# dependencies with other addons, a list of them separated by spaces 
